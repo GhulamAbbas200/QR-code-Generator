@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Code Generator</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--text:#1c1c1a;--muted:#6b6b66;--border:#dcdcd6;--accent:#2f5fd0}
+@media (prefers-color-scheme:dark){:root{--bg:#171716;--card:#222220;--text:#ecece8;--muted:#9a9a93;--border:#3a3a36;--accent:#7aa2ff}}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center;padding:24px 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:440px}
+h1{font-size:20px;margin:0 0 16px}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
+textarea,select{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea{resize:vertical;min-height:70px}
+.row{display:flex;gap:12px}.row>div{flex:1}
+#out{text-align:center;margin-top:20px}
+#out img{width:240px;max-width:100%;image-rendering:pixelated;border:1px solid var(--border);border-radius:8px;background:#fff}
+button{margin-top:12px;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>QR Code Generator</h1>
+  <label for="t">URL or text</label>
+  <textarea id="t" placeholder="https://example.com"></textarea>
+  <div class="row">
+    <div><label for="ec">Error correction</label>
+      <select id="ec"><option value="L">Low</option><option value="M" selected>Medium</option><option value="Q">Quartile</option><option value="H">High</option></select></div>
+    <div><label for="sz">Size (px)</label>
+      <select id="sz"><option>256</option><option selected>512</option><option>1024</option></select></div>
+  </div>
+  <div id="out"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+const t = document.getElementById('t'),
+      ec = document.getElementById('ec'),
+      sz = document.getElementById('sz'),
+      out = document.getElementById('out');
+
+function render() {
+  const text = t.value.trim();
+  out.innerHTML = '';
+  if (!text) return;
+
+  try {
+    // 1. Build the QR matrix (0 = auto-detect version)
+    const qr = qrcode(0, ec.value);
+    qr.addData(text);
+    qr.make();
+
+    // 2. Work out pixel sizes (4-module quiet zone around the code)
+    const n = qr.getModuleCount(), margin = 4, total = n + margin * 2;
+    const size = +sz.value;
+    const cell = Math.max(1, Math.floor(size / total));
+    const px = cell * total;
+
+    // 3. Draw black squares on a white canvas
+    const c = document.createElement('canvas');
+    c.width = c.height = px;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, px, px);
+    x.fillStyle = '#000';
+    for (let r = 0; r < n; r++)
+      for (let q = 0; q < n; q++)
+        if (qr.isDark(r, q)) x.fillRect((q + margin) * cell, (r + margin) * cell, cell, cell);
+
+    // 4. Show it as an image (so right-click / long-press save works)
+    const img = new Image();
+    img.src = c.toDataURL('image/png');
+    img.alt = 'QR code';
+    out.appendChild(img);
+
+    // 5. Copy-to-clipboard button
+    const b = document.createElement('button');
+    b.textContent = 'Copy image';
+    b.onclick = async () => {
+      try {
+        const blob = await new Promise(r => c.toBlob(r));
+        await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+        b.textContent = 'Copied';
+      } catch (e) {
+        b.textContent = 'Copy blocked: right-click the image instead';
+      }
+    };
+    out.appendChild(b);
+
+    const h = document.createElement('div');
+    h.className = 'hint';
+    h.textContent = 'Right-click (or long-press) the image to save it, then use Insert > Pictures in Word.';
+    out.appendChild(h);
+  } catch (e) {
+    out.textContent = 'Text is too long for a QR code. Try shorter text or lower error correction.';
+  }
+}
+
+[t, ec, sz].forEach(e => e.addEventListener('input', render));
+</script>
+</body>
+</html>
